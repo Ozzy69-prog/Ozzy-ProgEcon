@@ -176,8 +176,10 @@ class GovernmentClass(ConsumerClass):
             (tuple): (revenue, utility)
 
         """
-
-        pass
+        self.set_taxes(T=T,tau1=0.0,tau2=0.0,tau3=0.0)
+        opt = self.solve(do_print=False)
+        R = self.tax_revenue(opt)
+        u = opt.u
 
         return R,u
 
@@ -206,7 +208,18 @@ class GovernmentClass(ConsumerClass):
 
         """
 
-        pass
+        # a. grid over the tax rate
+        tau_vec = np.linspace(0,tau_max,N)
+
+        # b. revenue in every grid point
+        R_vec = np.empty(N)
+        for i,tau_i in enumerate(tau_vec):
+            R_vec[i],_ = self.revenue_and_utility(tau_i,goods=goods)
+
+        # c. the best point
+        i_max = np.argmax(R_vec)
+        tau = tau_vec[i_max]
+        R = R_vec[i_max]
 
         return tau,R
 
@@ -232,6 +245,14 @@ class GovernmentClass(ConsumerClass):
 
         """
 
-        pass
+        def f(tau_i):
+            R,_ = self.revenue_and_utility(tau_i,goods=goods)
+            return R - R_target
+
+        try:
+            res = optimize.root_scalar(f,bracket=bracket,method='brentq')
+            tau = res.root
+        except ValueError:
+            tau = np.nan
 
         return tau

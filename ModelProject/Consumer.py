@@ -133,9 +133,10 @@ class ConsumerClass:
 
         par = self.par
 
-        xB = self.ces(x2,x3,par.beta,par.sigma_B)
-        u = self.ces(x1,xB,par.alpha,par.sigma_A)
-
+        xB = self.ces(z1=x2,z2=x3,w=par.beta,sigma = par.sigma_B) #transportation goods
+                
+        u = self.ces(z1=x1,z2=xB,w=par.alpha,sigma = par.sigma_A) # combined utility of food and transportation goods
+        
         return u
 
     ###############################
@@ -192,8 +193,7 @@ class ConsumerClass:
 
         """
 
-        x1,x2,x3 = self.quantities(s1,w)
-        u = self.utility(x1,x2,x3)
+        u = self.utility(*self.quantities(s1,w)) # compute u via two variables s1 (share of food) and w (share of transportation goods)
 
         return u
 
@@ -237,31 +237,33 @@ class ConsumerClass:
 
         par = self.par
         opt = SimpleNamespace()
-
+        
         # a. the two grids
-        s1_vec = np.linspace(0,1,N)
-        w_vec = np.linspace(0,1,N)
-        s1_grid,w_grid = np.meshgrid(s1_vec,w_vec,indexing='ij')
-
+        s1_vec = np.linspace(0,1,N) #Vector \in [0,1] reagering size of N
+        w_vec = np.linspace(0,1,N) #Vector \in [0,1] reagering the same size of N
+        s1_grid, w_grid = np.meshgrid(s1_vec, w_vec, indexing='ij') #combing the combinations of the vectors
+        
         # b. utility in every grid point
-        u_grid = self.value_of_choice(s1_grid,w_grid)
-
+        u_grid = self.value_of_choice(s1_grid, w_grid) # Compute the u_grid via s1_grid and w_grid
+        
         # c. the best point
-        i,j = np.unravel_index(np.argmax(u_grid),u_grid.shape)
-
-        # d. results
-        opt.s1 = s1_grid[i,j]
-        opt.w = w_grid[i,j]
-        opt.s1,opt.s2,opt.s3 = self.shares(opt.s1,opt.w)
-        opt.u = u_grid[i,j]
-
+        best_grid = np.unravel_index(np.argmax(u_grid),u_grid.shape) #finding the numeration (i,j) to the largest utility in the grid
+        u_max = u_grid[best_grid] #finding the largest utility in the grid
+        s1_u_max, w_u_max = s1_grid[best_grid], w_grid[best_grid] # finding the values of s and w (coordinates) for u_max
+        
+        
+        # d. results (for later)
+                
+        # i. Resulting values:
+        opt.w = w_u_max
+        opt.s1, opt.s2, opt.s3 = self.shares(s1_u_max,w_u_max)
+        opt.u = u_max
+        
+        # ii. Resultes to plot the figure:
         opt.s1_grid = s1_grid
         opt.w_grid = w_grid
         opt.u_grid = u_grid
-
-        if do_print:
-            print(f's1 = {opt.s1:.4f}, w = {opt.w:.4f}, u = {opt.u:.4f}')
-
+        
         return opt
 
     def solve(self,s0=None,do_print=True,**kwargs):
@@ -281,28 +283,30 @@ class ConsumerClass:
 
         """
 
-        par = self.par
         opt = SimpleNamespace()
-
+        
         # a. starting guess
-        if s0 is None: s0 = np.array([0.5,0.5])
+        if s0 is None: s0 = np.array([0.5,0.5]) # s0 = staring guess, where s1 = 0.5 and w = 0.5
         s0 = np.asarray(s0,dtype=float)
-
+        
         # b. record the path with a callback
         path = [s0.copy()]
-
-        # c. minimize
-        res = optimize.minimize(self.objective,s0,method='L-BFGS-B',
-            bounds=((0,1),(0,1)),callback=lambda sk: path.append(sk.copy()),**kwargs)
-
+        
+        # c. minimise
+        res = optimize.minimize(                            #Saving the resultes
+            self.objective,                                 #The funktion to minimise
+            s0,                                             #s0 = starting guess
+            method='L-BFGS-B',
+            bounds=((0,1),(0,1)),                           #Interval for s1, w \in [0,1]
+            callback=lambda sk: path.append(sk.copy()),      #Saving the convergence path
+            **kwargs)
+        
         # d. results
-        opt.s1,opt.w = res.x
-        opt.s1,opt.s2,opt.s3 = self.shares(opt.s1,opt.w)
-        opt.u = -res.fun
-        opt.path = np.array(path)
+        opt.s1 = res.x[0]
+        opt.w = res.x[1]
+        opt.s1, opt.s2, opt.s3 = self.shares(opt.s1, opt.w)
+        opt.u = self.value_of_choice(opt.s1, opt.w)
+        opt.path = path
         opt.res = res
-
-        if do_print:
-            print(f's1 = {opt.s1:.4f}, w = {opt.w:.4f}, u = {opt.u:.4f}, nfev = {res.nfev}')
-
+        
         return opt
